@@ -61,6 +61,9 @@ public class SmartProducer implements Runnable {
             "Collect these options in a file and include it as an @args file.")
     List<String> knownTopics = new ArrayList<>();
 
+    @CommandLine.Option(names = "--known-group", description = "Name of a consumer group to monitor (see --monitor). May be specified multiple times.")
+    List<String> knownConsumerGroups = new ArrayList<>();
+
     @CommandLine.Parameters(description = "Message files. The file name of file path needs to start with or contain " +
             "a string that can be mapped to one of the known topics.")
     List<Path> messageFiles = new ArrayList<>();
@@ -77,13 +80,16 @@ public class SmartProducer implements Runnable {
 
     @CommandLine.Option(names = {"--admin", "-A"}, description = "Additional Kafka admin properties (key=value). " +
             "Can be specified multiple times.")
-    Map<String, String> adminProperties;
+    Map<String, String> adminProperties = new HashMap<>();
 
     @CommandLine.Option(names = "--broker", defaultValue = "localhost:9092", description = "Connect to the indicated Kafka broker (host:port, default: ${DEFAULT-VALUE}).")
     String broker;
 
     @CommandLine.Option(names = "-C", description = "Custom topic config values to set after --purge.")
     Map<String, String> customConfigs = new HashMap<>();
+
+    @CommandLine.Option(names = "--monitor", description = "Monitor the progress of messages being consumed.")
+    boolean monitor;
 
     @SuppressWarnings({"java:S3776", /* control flow is simple; refactoring negatively affects static analysis */})
     @Override
@@ -144,24 +150,38 @@ public class SmartProducer implements Runnable {
         }
 
         if (purge) {
-            var adminProps = new Properties();
-            configureClientProperties(adminProps);
-            adminProps.putAll(adminProperties);
-            purgeTopics(AdminClient.create(adminProps), effectiveTopics);
+            purgeTopics(createAdminClient(), effectiveTopics);
         }
 
-        if (messageFiles.isEmpty()) {
-            System.err.println("No message files specified.");
-            return;
-        }
-        if (parallelism == null || !parallelism.disableParallel) {
-            var px = parallelism == null || parallelism.parallel < 0 ? 8 : parallelism.parallel;
-            sender.sendInParallel(px, effectiveTopics, messageFilesByTopic, props);
-        } else {
-            try (var producer = new KafkaProducer<String, byte[]>(props)) {
-                sender.sendInSequence(effectiveTopics, messageFilesByTopic, producer);
+        if (!messageFiles.isEmpty()) {
+            if (parallelism == null || !parallelism.disableParallel) {
+                var px = parallelism == null || parallelism.parallel < 0 ? 8 : parallelism.parallel;
+                sender.sendInParallel(px, effectiveTopics, messageFilesByTopic, props);
+            } else {
+                try (var producer = new KafkaProducer<String, byte[]>(props)) {
+                    sender.sendInSequence(effectiveTopics, messageFilesByTopic, producer);
+                }
             }
+        } else if(!monitor) {
+            System.err.println("No message files specified.");
         }
+
+        if(monitor) {
+            if(knownConsumerGroups.isEmpty()) {
+                System.err.println("`--monitor` requires that consumer groups are specified using `--known-group=` " +
+                        "(can be specified multiple times).");
+                return;
+            }
+
+            new LagMonitor(createAdminClient(), effectiveTopics, new HashSet<>(knownConsumerGroups)).monitor();
+        }
+    }
+
+    private AdminClient createAdminClient() {
+        var adminProps = new Properties();
+        configureClientProperties(adminProps);
+        adminProps.putAll(adminProperties);
+        return AdminClient.create(adminProps);
     }
 
     /**

@@ -19,6 +19,7 @@ dependencies {
     runtimeOnly 'ch.qos.logback:logback-core:1.2.3'
     runtimeOnly 'ch.qos.logback:logback-classic:1.2.3'
     annotationProcessor 'info.picocli:picocli-codegen:4.3.2'
+    implementation 'me.tongfei:progressbar:0.8.1'
 
     annotationProcessor 'org.projectlombok:lombok:1.18.12'
     compileOnly 'org.projectlombok:lombok:1.18.12'
