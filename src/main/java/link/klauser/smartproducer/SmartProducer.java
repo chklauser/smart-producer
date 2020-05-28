@@ -28,7 +28,7 @@ import static java.util.stream.Collectors.*;
         "  ${COMMAND-NAME} @topics.txt @all-messages.txt --purge",
         "",
         "@|bold Load a single message file into local Kafka broker; topic inferred from file name:|@",
-        "  ${COMMAND-NAME} @topics.txt --local in-commons2-code-table-series-sync-event_MY_TABLE.json"
+        "  ${COMMAND-NAME} @topics.txt --local incoming-orders_MY_TABLE.json"
 }, usageHelpWidth = 120)
 @Slf4j
 public class SmartProducer implements Runnable {
